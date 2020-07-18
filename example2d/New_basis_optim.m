@@ -1,5 +1,5 @@
 
-function [Psi,Phi] = New_basis_gamblet_oldversion1(A,M,N_fine,N_coarse,opt2);
+function [Psi,Phi] = New_basis_optim(A,M,N_fine,N_coarse,opt2);
 
 % standard FEM basis (coarse grid)
 Phi = sparse(N_fine^2,N_coarse^2);

@@ -45,20 +45,20 @@ n_snap = length(snap_t_idx) - 1;
 t_series = t(coarse_t_idx(snap_t_idx));
 
 %% computing coarse solutions
-N1_array = log([3*2^8, 2^9, 3*2^7, 2^8, 3*2^6, 2^7, 3*2^5, 2^6, 3*2^4, 2^5]) /log(2);
+N1_array = log([3*2^7, 2^8, 3*2^6, 2^7, 3*2^5, 2^6, 3*2^4, 2^5]) /log(2);
 N2_array = max(N1_array-3,1);
 time_record = zeros(3,length(N1_array));
-time_description = {'coarse FEM','coarse OC','coarse Combo'};
+time_description = {'coarse FEM','coarse MsFEM','coarse En MsFEM'};
 
 
 
 for j = 1:length(N1_array)
     u_FEM = zeros(length(x_fine),n_snap+1);
     u_FEM(:,1) = u_ini;
-    u_gamblet = zeros(length(x_fine),n_snap+1);
-    u_gamblet(:,1) = u_ini;
-    u_combo = zeros(length(x_fine),n_snap+1);
-    u_combo(:,1) = u_ini;
+    u_Ms = zeros(length(x_fine),n_snap+1);
+    u_Ms(:,1) = u_ini;
+    u_EnMs = zeros(length(x_fine),n_snap+1);
+    u_EnMs(:,1) = u_ini;
 
     N1 = round(2^(N1_array(j)));
     N2 = round(2^(N2_array(j)));
@@ -70,21 +70,21 @@ for j = 1:length(N1_array)
     A1_FEM = Phi' * (A + P1) * Phi;
     A2_FEM = Phi' * P2 * Phi;
     
-    % coarse OC
-    U_gamblet = (Psi' * M * Psi) \ (Psi' * M * u_ini);
-    M_gamblet = Psi' * M * Psi;
-    A1_gamblet = Psi' * (A + P1) * Psi;
-    A2_gamblet = Psi' * P2 * Psi;
+    % coarse MsFEM
+    U_Ms = (Psi' * M * Psi) \ (Psi' * M * u_ini);
+    M_Ms = Psi' * M * Psi;
+    A1_Ms = Psi' * (A + P1) * Psi;
+    A2_Ms = Psi' * P2 * Psi;
 
-    % coarse combo
+    % coarse En MsFEM
     [Phi2,Psi2] = New_basis_optimization(A+P1+P2,M,N_fine,N2,'periodic',12);
-    Psi_combo = [Psi,Psi2];
-    Psi_combo = Gram_schmidt_orthonormal(Psi_combo,M);
+    Psi_EnMs = [Psi,Psi2];
+    Psi_EnMs = Gram_schmidt_orthonormal(Psi_EnMs,M);
 
-    U_combo = (Psi_combo' * M * Psi_combo) \ (Psi_combo' * M * u_ini);
-    M_combo = Psi_combo' * M * Psi_combo;
-    A1_combo = Psi_combo' * (A + P1) * Psi_combo;
-    A2_combo = Psi_combo' * P2 * Psi_combo;
+    U_EnMs = (Psi_EnMs' * M * Psi_EnMs) \ (Psi_EnMs' * M * u_ini);
+    M_EnMs = Psi_EnMs' * M * Psi_EnMs;
+    A1_EnMs = Psi_EnMs' * (A + P1) * Psi_EnMs;
+    A2_EnMs = Psi_EnMs' * P2 * Psi_EnMs;
     
     %% time evolution 
     t_c = t(coarse_t_idx);
@@ -97,10 +97,10 @@ for j = 1:length(N1_array)
             U_FEM = (1i * epsilon * M_FEM - tau/2 * A1_FEM - tau/2 * A2_FEM * PotentialWt(t_c(i)) ) \ ( (1i * epsilon * M_FEM + tau/2 * A1_FEM + tau/2 * A2_FEM * PotentialWt(t_c(i-1)) ) * U_FEM );
             time_record(1,j) = time_record(1,j) + toc;
             tic;
-            U_gamblet = (1i * epsilon * M_gamblet - tau/2 * A1_gamblet - tau/2 * A2_gamblet * PotentialWt(t_c(i)) ) \ ( (1i * epsilon * M_gamblet + tau/2 * A1_gamblet + tau/2 * A2_gamblet * PotentialWt(t_c(i-1)) ) * U_gamblet );
+            U_Ms = (1i * epsilon * M_Ms - tau/2 * A1_Ms - tau/2 * A2_Ms * PotentialWt(t_c(i)) ) \ ( (1i * epsilon * M_Ms + tau/2 * A1_Ms + tau/2 * A2_Ms * PotentialWt(t_c(i-1)) ) * U_Ms );
             time_record(2,j) = time_record(2,j) + toc;
             tic;
-            U_combo = (1i * epsilon * M_combo - tau/2 * A1_combo - tau/2 * A2_combo * PotentialWt(t_c(i)) ) \ ( (1i * epsilon * M_combo + tau/2 * A1_combo + tau/2 * A2_combo * PotentialWt(t_c(i-1)) ) * U_combo );                
+            U_EnMs = (1i * epsilon * M_EnMs - tau/2 * A1_EnMs - tau/2 * A2_EnMs * PotentialWt(t_c(i)) ) \ ( (1i * epsilon * M_EnMs + tau/2 * A1_EnMs + tau/2 * A2_EnMs * PotentialWt(t_c(i-1)) ) * U_EnMs );                
             time_record(3,j) = time_record(3,j) + toc;
         end;
         %% error snapshots
@@ -108,8 +108,8 @@ for j = 1:length(N1_array)
             q_i = find(snap_t_idx==i);
             
             u_FEM(:,q_i) = Phi * U_FEM;
-            u_gamblet(:,q_i) = Psi * U_gamblet;
-            u_combo(:,q_i) = Psi_combo * U_combo;
+            u_Ms(:,q_i) = Psi * U_Ms;
+            u_EnMs(:,q_i) = Psi_EnMs * U_EnMs;
             
             if (mod(q_i-1,round(n_snap/8))==0)
                 fprintf('%d,',q_i);
@@ -119,7 +119,7 @@ for j = 1:length(N1_array)
     end;
     filename1 = sprintf('Ex1_coarsesol_eps1over%d_E0%d_T%.3f_h1over%d_H1over%d_dt1over%d_gap%d.mat',round(1/epsilon),E0,T,N_fine,N1,round(1/deltat),gap);
     save(filename1,'time_record','time_description','N1','N2','-v7.3');
-    save(filename1,'u_FEM','u_gamblet','u_combo','-append');
+    save(filename1,'u_FEM','u_Ms','u_EnMs','-append');
     fprintf('### N1=%d, N2=%d \n',N1,N2);
 end;
 

@@ -58,14 +58,14 @@ t_series = t(coarse_t_idx(snap_t_idx));
 
 %% Various reduced basis solution
 
-N_array = [64, 48, 32, 24, 16, 12];
+N_array = [48, 32, 24, 16, 12];
 time_record = zeros(2,length(N_array));
 
 for j = N_array
     j1 = find(N_array==j);
     N = j;
     N2 = round(j/4);
-    [Psi,Phi] = New_basis_gamblet_oldversion1(A+P1,M,N_fine,N,12);
+    [Psi,Phi] = New_basis_optim(A+P1,M,N_fine,N,12);
     Psi = full(Psi);
     
     % coarse FEM
@@ -73,19 +73,35 @@ for j = N_array
     Af_FEM = gpuArray( Phi' * (1i * epsilon * M + deltat/2 * (A + P1)) * Phi );
     P2_FEM = gpuArray( Phi' * P2 * Phi );
     
-    % gamblet 
-    Ab_gamblet = gpuArray( (Psi' * (1i * epsilon * M - deltat/2 * (A + P1))) * Psi );
-    Af_gamblet = gpuArray( (Psi' * (1i * epsilon * M + deltat/2 * (A + P1))) * Psi );
-    P2_gamblet = gpuArray( (Psi' * P2) * Psi );
+    % MsFEM 
+    Ab_Ms = gpuArray( (Psi' * (1i * epsilon * M - deltat/2 * (A + P1))) * Psi );
+    Af_Ms = gpuArray( (Psi' * (1i * epsilon * M + deltat/2 * (A + P1))) * Psi );
+    P2_Ms = gpuArray( (Psi' * P2) * Psi );
     
     
     % initial data
     U_FEM = gpuArray( (Phi' * M * Phi) \ (Phi' * M * u_ini) );
-    U_gamblet = gpuArray( (Psi' * M * Psi) \ (Psi' * M * u_ini) );
+    U_Ms = gpuArray( (Psi' * M * Psi) \ (Psi' * M * u_ini) );
+    %{
+    % coarse FEM
+    Ab_FEM = Phi' * (1i * epsilon * M - deltat/2 * (A + P1)) * Phi ;
+    Af_FEM = Phi' * (1i * epsilon * M + deltat/2 * (A + P1)) * Phi ;
+    P2_FEM = Phi' * P2 * Phi ;
+    
+    % MsFEM 
+    Ab_Ms = (Psi' * (1i * epsilon * M - deltat/2 * (A + P1))) * Psi ;
+    Af_Ms = (Psi' * (1i * epsilon * M + deltat/2 * (A + P1))) * Psi ;
+    P2_Ms = (Psi' * P2) * Psi ;
+    
+    
+    % initial data
+    U_FEM = (Phi' * M * Phi) \ (Phi' * M * u_ini) ;
+    U_Ms = (Psi' * M * Psi) \ (Psi' * M * u_ini) ;
+    %}
     u_FEM = zeros(N_fine^2,n_snap+1);
     u_FEM(:,1) = Phi * gather(U_FEM);
-    u_gamblet = zeros(N_fine^2,n_snap+1);
-    u_gamblet(:,1) = Psi * gather(U_gamblet);
+    u_Ms = zeros(N_fine^2,n_snap+1);
+    u_Ms(:,1) = Psi * gather(U_Ms);
     
     t_c = t(coarse_t_idx);
     for i = 1:length(coarse_t_idx)
@@ -97,13 +113,13 @@ for j = N_array
             [U_FEM,ccc1,ccc2,ccc3,ccc4] = gmres(Ab_FEM - tau/2 * P2_FEM * PotentialWt(t_m) , ( Af_FEM + tau/2 * P2_FEM * PotentialWt(t_m) )*U_FEM , 10 , gap/2*1e-12);
             time_record(1,j1) = time_record(1,j1) + toc;
             tic;
-            U_gamblet = ( Ab_gamblet - tau/2 * P2_gamblet * PotentialWt(t_m) ) \ ( ( Af_gamblet + tau/2 * P2_gamblet * PotentialWt(t_m) )*U_gamblet );
+            U_Ms = ( Ab_Ms - tau/2 * P2_Ms * PotentialWt(t_m) ) \ ( ( Af_Ms + tau/2 * P2_Ms * PotentialWt(t_m) )*U_Ms );
             time_record(2,j1) = time_record(2,j1) + toc;
         end;
         if (ismember(i,snap_t_idx))
             q_i = find(snap_t_idx==i);
             u_FEM(:,q_i) = Phi * gather(U_FEM);
-            u_gamblet(:,q_i) = Psi * gather(U_gamblet);
+            u_Ms(:,q_i) = Psi * gather(U_Ms);
             fprintf('%d   ,%.2f(hr.), %.2f(hr.),\n',q_i,time_record(1,j1)/3600,time_record(2,j1)/3600);
         end;
     end;
@@ -111,9 +127,9 @@ for j = N_array
     fprintf('\n');
     clear Psi Phi;
     
-    filename1 = sprintf('Ex4_coarseFEMgamblet_eps1over%d_E0%d_T%.3f_h1over%d_H1over%d_dt1over%d_gap%d.mat',round(1/epsilon),E0,T,N_fine,N,round(1/deltat),gap);
+    filename1 = sprintf('Ex4_coarseFEMMs_eps1over%d_E0%d_T%.3f_h1over%d_H1over%d_dt1over%d_gap%d.mat',round(1/epsilon),E0,T,N_fine,N,round(1/deltat),gap);
     save(filename1,'epsilon','DiffCoef','PotentialV1','E0','PotentialV2','PotentialWt','sigma1','IniFunc','N_fine','-v7.3');
     save(filename1,'t_series','T','deltat','gap','snap_t_idx','coarse_t_idx','t','n_snap','-append');
-    save(filename1,'N','N2','u_FEM','u_gamblet','time_record','-append');
+    save(filename1,'N','N2','u_FEM','u_Ms','time_record','-append');
 
 end;

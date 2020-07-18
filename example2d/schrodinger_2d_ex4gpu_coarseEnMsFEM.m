@@ -58,30 +58,38 @@ t_series = t(coarse_t_idx(snap_t_idx));
 
 %% Various reduced basis solution
 
-N_array = [64, 48, 32, 24, 16, 12];
+N_array = [96, 48, 32, 24, 16, 12];
 
 for j = N_array
     j1 = find(N_array==j);
     N = j;
     N2 = round(j/4);
     time_record = 0;
-    [Psi,Phi] = New_basis_gamblet_oldversion1(A+P1,M,N_fine,N,12);
+    [Psi,Phi] = New_basis_optim(A+P1,M,N_fine,N,12);
     
     
-    % combo
-    [Psi2,Phi2] = New_basis_gamblet_oldversion1(A+P1+P2,M,N_fine,N2,12);
-    Psi_combo = full([Psi,Psi2]);
+    % Enriched MsFEM
+    [Psi2,Phi2] = New_basis_optim(A+P1+P2,M,N_fine,N2,12);
+    Psi_EnMs = full([Psi,Psi2]);
     clear Psi2 Phi2 Phi Psi;
-    Psi_combo = Gram_schmidt_orthonormal(Psi_combo,M);
+    Psi_EnMs = Gram_schmidt_orthonormal(Psi_EnMs,M);
     
-    Ab_combo = gpuArray( Psi_combo' * (1i * epsilon * M - deltat/2 * (A + P1)) * Psi_combo );
-    Af_combo = gpuArray( Psi_combo' * (1i * epsilon * M + deltat/2 * (A + P1)) * Psi_combo );
-    P2_combo = gpuArray( Psi_combo' * P2 * Psi_combo );
+    Ab_EnMs = gpuArray( Psi_EnMs' * (1i * epsilon * M - deltat/2 * (A + P1)) * Psi_EnMs );
+    Af_EnMs = gpuArray( Psi_EnMs' * (1i * epsilon * M + deltat/2 * (A + P1)) * Psi_EnMs );
+    P2_EnMs = gpuArray( Psi_EnMs' * P2 * Psi_EnMs );
 
     % initial data
-    U_combo = gpuArray( (Psi_combo' * M * Psi_combo) \ (Psi_combo' * M * u_ini) );
-    u_combo = zeros(N_fine^2,n_snap+1);
-    u_combo(:,1) = Psi_combo * gather(U_combo);
+    U_EnMs = gpuArray( (Psi_EnMs' * M * Psi_EnMs) \ (Psi_EnMs' * M * u_ini) );
+    %{
+    Ab_EnMs = Psi_EnMs' * (1i * epsilon * M - deltat/2 * (A + P1)) * Psi_EnMs ;
+    Af_EnMs = Psi_EnMs' * (1i * epsilon * M + deltat/2 * (A + P1)) * Psi_EnMs ;
+    P2_EnMs = Psi_EnMs' * P2 * Psi_EnMs ;
+
+    % initial data
+    U_EnMs = (Psi_EnMs' * M * Psi_EnMs) \ (Psi_EnMs' * M * u_ini) ;
+    %}
+    u_EnMs = zeros(N_fine^2,n_snap+1);
+    u_EnMs(:,1) = Psi_EnMs * gather(U_EnMs);
     
     t_c = t(coarse_t_idx);
     for i = 1:length(coarse_t_idx)
@@ -90,22 +98,22 @@ for j = N_array
             tau = t_c(i) - t_c(i-1);
             t_m = ( t_c(i) + t_c(i-1) ) / 2;
             tic;
-            U_combo = ( Ab_combo - tau/2 * P2_combo * PotentialWt(t_m) ) \ ( ( Af_combo + tau/2 * P2_combo * PotentialWt(t_m) )*U_combo );
+            U_EnMs = ( Ab_EnMs - tau/2 * P2_EnMs * PotentialWt(t_m) ) \ ( ( Af_EnMs + tau/2 * P2_EnMs * PotentialWt(t_m) )*U_EnMs );
             time_record = time_record + toc;
         end;
         if (ismember(i,snap_t_idx))
             q_i = find(snap_t_idx==i);
-            u_combo(:,q_i) = Psi_combo * gather(U_combo);
+            u_EnMs(:,q_i) = Psi_EnMs * gather(U_EnMs);
             fprintf('%d  , N = %d ,  %.2f(hr.) \n',q_i,N,time_record/3600);
         end;
     end;
 
     fprintf('\n');
-    clear Psi_combo;
+    clear Psi_EnMs;
     
-    filename1 = sprintf('Ex4_coarseFEMcombo_eps1over%d_E0%d_T%.3f_h1over%d_H1over%d_dt1over%d_gap%d.mat',round(1/epsilon),E0,T,N_fine,N,round(1/deltat),gap);
+    filename1 = sprintf('Ex4_coarseEnMs_eps1over%d_E0%d_T%.3f_h1over%d_H1over%d_dt1over%d_gap%d.mat',round(1/epsilon),E0,T,N_fine,N,round(1/deltat),gap);
     save(filename1,'epsilon','DiffCoef','PotentialV1','E0','PotentialV2','PotentialWt','sigma1','IniFunc','N_fine','-v7.3');
     save(filename1,'t_series','T','deltat','gap','snap_t_idx','coarse_t_idx','t','n_snap','-append');
-    save(filename1,'N','N2','u_combo','time_record','-append');
+    save(filename1,'N','N2','u_EnMs','time_record','-append');
 
 end;
