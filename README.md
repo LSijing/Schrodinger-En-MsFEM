@@ -1,4 +1,5 @@
-Multiscale FEMs for Schrodinger equations with time-dependent potentials.
+# Multiscale FEMs for semiclassical Schrödinger equations with time-dependent potentials.
+# 多尺度有限元方法求解含时变势场的半经典薛定谔方程
 
 ## 1d and 2d numerical examples
 Directories `example1d` and `example2d` for 1d and 2d examples respectively. Details please refer to our paper [Efficient multiscale methods for the semiclassical Schrödinger equation with time-dependent potentials.](https://doi.org/10.1016/j.cma.2020.113232) <br>
